@@ -1,0 +1,129 @@
+APACHE TOMCAT - SOLUCIÓN DE PROBLEMAS
+=====================================
+-----------------------------------------------
+LA APLICACIÓN ES MUY GRANDE Y NO SE PUEDE SUBIR
+-----------------------------------------------
+Mensaje: Falló Carga de Despliegue, Excepción: org.apache.tomcat.util.http.fileupload.FileUploadBase$SizeLimitExceededException: the request was rejected
+because its size (52983276) exceeds the configured maximum (52428800).
+Hay que ir al fichero ubicado en \webapps\manager\WEB-INF\web.xml y modificar:
+    <multipart-config>
+      <!-- 52MB max -->
+      <max-file-size>52428800</max-file-size>
+      <max-request-size>52428800</max-request-size>
+      <file-size-threshold>0</file-size-threshold>
+    </multipart-config>
+	
+	
+*******************************************************************************************************************************************************
+---------------------------------------------
+SUBIR APLICACIÓN GRAILS (WAR) A APACHE TOMCAT
+---------------------------------------------
+Si no hay ninguna conexión con bases de datos, es decir, el archivo DataSource.groovy está vacío, no habrá problema, la aplicación funcionará correctamente.
+
+En el caso de que se use la base de datos por defecto, FALLARÁ!!!.
+
+Si queremos usar una base de datos, por ejemplo PorstgreSQL, debemos copiar el conector (archivo jar) en la carpeta /lib del directorio donde está
+instalado el servidor Apache Tomcat. (postgresql-9.0-801.jdbc4.jar)
+
+Entonces ya se puede desplegar correctamente el WAR de la aplicación Grails.
+
+Y así ya no se obtiene el error de "No se pudo arrancar la aplicación en trayectoria de contexto apache tomcat".
+
+Para entrar en la direción, si el archivo WAR se llama "prueba-0.1.war", la trayectoria será "/prueba-0.1", pero se debera añadir el nombre del controlador
+para acceder manualmente a donde se desee.
+
+	
+*******************************************************************************************************************************************************
+---------------
+INSTALAR WECEEM
+---------------
+Se utiliza con una base de datos de PostgreSQL: usuario propietario de la base de datos "weceem" es "jesus.
+
+Modificar el tamaño de la aplicación en el fichero \webapps\manager\WEB-INF\web.xml.
+
+Archivo de configuración llamado "weceem.properties" que se ubica en "D:\wec". (A ESTE ARCHIVO NO SE LE HACE CASO)
+	 # Control whether or not connection pooling is enabled
+	dataSource.pooled=true
+	# Set the JDBC driver class name - class must be on classpath
+	dataSource.driverClassName=org.postgresql.Driver
+	# The user name for the SQL database
+	dataSource.username=jesus
+	# The password for the SQL database
+	dataSource.password=jesus
+	# The database update mode. Leave as "update"
+	dataSource.dbCreate=update
+	# The JDBC URL of your database
+	dataSource.url=jdbc:postgresql://localhost:5432/weceem
+
+
+	# The path to use for storing search index files - MUST be writable
+	searchable.index.path=d:/wec //o bien searchable.index.path=D:/apache-tomcat-8.0.3/webapps/weceem-1.2-M1/WEB-INF/grails-app/views/register
+
+En catalina.bat se añade o modifica:
+set JAVA_OPTS=%JAVA_OPTS% %LOGGING_CONFIG% -Dweceem.config.location=file:///D:/wec/weceem.properties -Xms518m -Xmx1024m 
+
+El jar que contiene los conectores de las bases de datos se guarda en el directorio "/lib" de apache, y cuando se ha creado el contexto (carpetas
+creadas a apartir del WAR) se incluye el jar dentro de D:\apache-tomcat-8.0.3\webapps\weceem-1.2-M1\WEB-INF\lib).
+
+Webs de ayuda:
+Indicar dónde encontrar el arhivo de configuración de weceem: http://forums.jcatalog.com/forums/posts/list/96.page
+Cómo establecer correctamente los conectores SQL: http://stackoverflow.com/questions/9793637/unable-to-set-java-opts-variable-dweceem-config-location-for-weceem-grails-cms
+
+Para indicar dónde encontrar el archivo mypolicy.groovy: (gestionar permisos de acceso a contenidos)
+:noJuliConfig
+set JAVA_OPTS=%JAVA_OPTS% %LOGGING_CONFIG% -Dweceem.security.policy.path="C:/wec/mypolicy.groovy" -Dweceem.config.location=file:///D:/wec/weceem.properties -Xmx700m -XX:MaxPermSize=512m
+
+if not "%LOGGING_MANAGER%" == "" goto noJuliManager
+set LOGGING_MANAGER=-Djava.util.logging.manager=org.apache.juli.ClassLoaderLogManager
+:noJuliManager
+set JAVA_OPTS=%JAVA_OPTS% %LOGGING_MANAGER% -Dweceem.security.policy.path="C:/wec/mypolicy.groovy" -Dweceem.config.location=file:///D:/wec/weceem.properties -Xmx700m -XX:MaxPermSize=512m
+
+Otras cosas interesantes:
+Si al crear el WAR hay una base de datos indicada diferente a la de weceem.properties utilizará las indicada en el WAR.
+A veces si el PgAdmin de PostgreSQL está siendo usado, o bien la base de datos no ha sido arrancada el mensaje más habitual será problema con el TransactionManager.
+
+
+*******************************************************************************************************************************************************
+-------------------------------------------------------
+PROBLEMAS CON java.lang.OutOfMemoryError: PermGen space
+-------------------------------------------------------
+Generalmente este problema se soluciona añadiendo a la variable JAVA_OPTS (líneas 179 y 184 aprox.) lo siguiente:
+	-Xmx512m -XX:MaxPermSize=125m
+	
+Quedando más o menos:
+	set "JAVA_OPTS=%JAVA_OPTS% %LOGGING_CONFIG%" -Xmx512m -XX:MaxPermSize=125m
+
+	if not "%LOGGING_MANAGER%" == "" goto noJuliManager
+	set LOGGING_MANAGER=-Djava.util.logging.manager=org.apache.juli.ClassLoaderLogManager 
+	:noJuliManager
+	set "JAVA_OPTS=%JAVA_OPTS% %LOGGING_MANAGER%" -Xmx512m -XX:MaxPermSize=125m
+
+Esto debe zanjar el tema. Pero si sigue fallando, en la ejecución, por ejemplo, en lugar del despliegue, cuando se dio esta situación el problema fue
+debido a que se estab utilizando un JDK y un JRE de 64 bits. Al pasar a un JDK y JRE de 32 bits todo se solucionó. Seguramente con el JRE basta.
+	
+
+*******************************************************************************************************************************************************
+----------------------------------------------------------------------------------------------------
+PROBLEMAS CON javax.xml.ws.soap.SOAPFaultException: None of the policy alternatives can be satisfied
+----------------------------------------------------------------------------------------------------
+Problema sucedido con la aplicación RP. En el momento de conectarse con el web service y perdir el archivo daba el siguiente error:
+	2015-01-14 12:25:46,589 [http-bio-8090-exec-2] ERROR rp.RebutNominaController  - javax.xml.ws.soap.SOAPFaultException: None of the policy alternatives can be satisfied.
+
+Este problema sucedía en un Tomcat desplegado pero no en el entorno de Grails.
+
+SOLUCIÓN:
+---------
+Copiar en la carpeta "lib" del Tomcat el archivo jar "jaxws-rt-2.1.4.jar" contenido en "D:\apache-tomcat-7.0.57\webapps\RP\WEB-INF\lib".
+
+
+<WEB SERVICES>*****************************************************************************************************************************************
+-----------------------------------
+APACHE TOMCAT - POLICY ALTERNATIVES
+-----------------------------------
+Se produce en un servidor Apache-Tomcat, no en el entorno GGTS, al ejecutar la acción que requiere de un método que utilice un web service.
+
+La traza es la siguiente:
+2015-06-03 08:52:17,232 [http-nio-8099-exec-3] ERROR rp.VinculacioActualController  - javax.xml.ws.soap.SOAPFaultException: None of the policy alternatives
+can be satisfied.
+
+Se soluciona copiando en el directorio "lib" del Apache-Tomcat la siguiente librería: jaxws-rt.jar (Ubicado en Error_WS)
